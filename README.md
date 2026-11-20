@@ -20,6 +20,8 @@ A VarSet change breaks a fillet's edge reference. The panel opens by itself and 
   <img src="docs/images/real-model-preview.png" width="49%" alt="The same model with Preview on: the fillet drawn in blue as it would regenerate with the suggested edge">
 </p>
 
+**Demo video** (3 min, narrated): https://avongil.github.io/FreeCAD-Resolve_Mode/#demo
+
 How it works, with answers to questions from FreeCAD's topological naming developers: **https://avongil.github.io/FreeCAD-Resolve_Mode/**
 
 ## Requirements

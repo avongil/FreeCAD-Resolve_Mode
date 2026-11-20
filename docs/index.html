@@ -114,6 +114,14 @@ footer{margin-top:72px;font-size:14px;color:var(--muted);border-top:1px solid va
   <span><b>License</b> LGPL-2.1-or-later</span>
 </div>
 
+<figure class="demo" id="demo" style="margin:32px 0 0;max-width:none">
+  <video controls preload="metadata" playsinline poster="media/demo-poster.jpg" style="width:100%;height:auto;display:block;border:1px solid var(--rule);border-radius:10px;background:#000">
+    <source src="media/demo.mp4" type="video/mp4">
+    <a href="media/demo.mp4">Download the demo video (MP4, 8 MB)</a>
+  </video>
+  <figcaption style="font-size:14px;color:var(--muted);margin-top:8px">Demo (3 min, narrated): Resolve_Mode fixing broken fillet references in a real model, then FeatureNamer naming a sketch and pad.</figcaption>
+</figure>
+
 <h2 id="what">What it does</h2>
 <p>When a recompute leaves a feature pointing at an edge or face that no longer exists, Resolve_Mode opens a panel listing every broken reference. Each one gets one of three outcomes:</p>
 <ul>
