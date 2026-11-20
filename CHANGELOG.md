@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 (2026-11-19)
+
+- Fixed: the Resolve_Mode preferences group showed FeatureNamer's page. The page class now has a unique name, because FreeCAD identifies Python preference pages by class name.
+
 ## 0.1.0 (2026-11-19)
 
 First release.
