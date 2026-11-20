@@ -11,6 +11,15 @@ A FreeCAD addon that finds **broken PartDesign references** (fillet or chamfer e
 - **Show candidates** lists the near-ties when no match is clear. **Pick in 3D view** lets you click the replacement yourself.
 - **Auto mode** opens the panel after any recompute that breaks something. Turn it off with the checkbox in the panel header or in the preferences.
 
+### In a real model
+
+A VarSet change breaks a fillet's edge reference. The panel opens by itself and suggests the matching edge. **Preview** shows the fillet regenerated with that edge before anything is changed.
+
+<p align="center">
+  <img src="docs/images/real-model-broken.png" width="49%" alt="Bumper trim model with the Resolve Mode panel showing one broken reference and a suggested match: Edge47">
+  <img src="docs/images/real-model-preview.png" width="49%" alt="The same model with Preview on: the fillet drawn in blue as it would regenerate with the suggested edge">
+</p>
+
 How it works, with answers to questions from FreeCAD's topological naming developers: **https://avongil.github.io/FreeCAD-Resolve_Mode/**
 
 ## Requirements
