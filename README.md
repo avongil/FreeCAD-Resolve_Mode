@@ -13,14 +13,15 @@ A FreeCAD addon that finds **broken PartDesign references** (fillet or chamfer e
 
 ### In a real model
 
-A VarSet change breaks a fillet's edge reference. The panel opens by itself and suggests the matching edge. **Preview** shows the fillet regenerated with that edge before anything is changed.
+A VarSet change breaks a fillet's edge reference. The panel opens by itself and suggests the matching edge (97%). **Preview** shows the fillet regenerated with that edge, and **Before** shows the candidate on the model before the fillet. Nothing changes until you accept.
 
 <p align="center">
-  <img src="docs/images/real-model-broken.png" width="49%" alt="Bumper trim model with the Resolve Mode panel showing one broken reference and a suggested match: Edge47">
-  <img src="docs/images/real-model-preview.png" width="49%" alt="The same model with Preview on: the fillet drawn in blue as it would regenerate with the suggested edge">
+  <img src="docs/images/real-model-broken.png" width="32%" alt="Bumper trim model with the Resolve Mode panel: one broken reference, suggested match Edge47 at 97% similarity">
+  <img src="docs/images/real-model-preview.png" width="32%" alt="Preview on: the fillet drawn in blue as it would regenerate with the suggested edge">
+  <img src="docs/images/real-model-before.png" width="32%" alt="Before on: the suggested edge highlighted on the model before the fillet">
 </p>
 
-**Demo video** (3 min, narrated): https://avongil.github.io/FreeCAD-Resolve_Mode/#demo
+**Demo video** (2 min, narrated, 1080p): https://avongil.github.io/FreeCAD-Resolve_Mode/#demo
 
 How it works, with answers to questions from FreeCAD's topological naming developers: **https://avongil.github.io/FreeCAD-Resolve_Mode/**
 
