@@ -15,7 +15,7 @@ import FreeCAD as App
 
 from . import commands
 from .gui.controller import Controller
-from .gui.preferences_page import PreferencesPage
+from .gui.preferences_page import ResolveModePreferencesPage
 
 Gui.addIconPath(str(Path(__file__).parent / "resources" / "icons"))
 
@@ -46,6 +46,7 @@ class _Manipulator:
 _controller = Controller()
 commands.register(_controller)
 App.addDocumentObserver(_controller)
-Gui.addPreferencePage(PreferencesPage, "Resolve_Mode")
+# FreeCAD keys Python preference pages by class name, so the name must be globally unique.
+Gui.addPreferencePage(ResolveModePreferencesPage, "Resolve_Mode")
 _manipulator = _Manipulator()
 Gui.addWorkbenchManipulator(_manipulator)

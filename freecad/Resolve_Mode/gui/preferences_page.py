@@ -10,7 +10,7 @@ from .qt import QtWidgets
 translate = App.Qt.translate
 
 
-class PreferencesPage:
+class ResolveModePreferencesPage:
     def __init__(self, _parent=None):
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle("Resolve_Mode")
