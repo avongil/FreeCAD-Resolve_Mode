@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Resolve_Mode Internals</title>
+<meta name="description" content="How the Resolve_Mode FreeCAD addon detects broken PartDesign references, fingerprints geometry, scores replacements and relinks them, with answers to questions from FreeCAD's topological naming developers.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Technical-manual column with a sticky contents rail; same tokens as the FeatureNamer manual */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --ink:#1b2130; --muted:#5a6375; --rule:#d9dde5;
+  --accent:#2f5bd3; --accent-soft:#e6ecfb; --danger:#c62828; --danger-soft:#fde8e8;
+  --ok:#2e7d32; --ok-soft:#e5f3e6; --warn:#9a6700; --warn-soft:#fff3df;
+  --code-bg:#eef0f4;
+  --f-display:"Archivo", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", Consolas, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12151d; --surface:#1a1f2a; --ink:#e6e9f0; --muted:#9aa3b5; --rule:#2c3343;
+  --accent:#86a5ff; --accent-soft:#1e2a4a; --danger:#f0716b; --danger-soft:#3a1c1e;
+  --ok:#6cc070; --ok-soft:#18301b; --warn:#f0b35c; --warn-soft:#2e2412;
+  --code-bg:#202632; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151d; --surface:#1a1f2a; --ink:#e6e9f0; --muted:#9aa3b5; --rule:#2c3343;
+  --accent:#86a5ff; --accent-soft:#1e2a4a; --danger:#f0716b; --danger-soft:#3a1c1e;
+  --ok:#6cc070; --ok-soft:#18301b; --warn:#f0b35c; --warn-soft:#2e2412;
+  --code-bg:#202632; color-scheme:dark}
+
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.6;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+.wrap{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:200px minmax(0,1fr);gap:56px;padding-block:48px 96px}
+@media (max-width:860px){.wrap{grid-template-columns:minmax(0,1fr);gap:24px;padding-block:28px 64px}.toc{display:none}}
+.toc{position:sticky;top:24px;align-self:start;font-size:14px}
+.toc p{font-family:var(--f-display);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:12px;color:var(--muted);margin:0 0 10px}
+.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.toc a{color:var(--muted);text-decoration:none}
+.toc a:hover,.toc a:focus-visible{color:var(--accent)}
+main{min-width:0}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:clamp(34px,5vw,52px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:28px;font-weight:800;margin-top:72px;padding-top:20px;border-top:2px solid var(--ink)}
+h3{font-size:19px;font-weight:700;margin-top:32px}
+p,li{max-width:70ch}
+a{color:var(--accent)}
+.eyebrow{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.lede{font-size:20px;color:var(--muted);margin:16px 0 0}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:22px;font-size:14px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:600}
+code,pre{font-family:var(--f-mono);font-size:.86em}
+code{background:var(--code-bg);padding:.1em .35em;border-radius:4px;overflow-wrap:anywhere}
+pre{background:var(--code-bg);padding:14px 16px;border-radius:8px;overflow-x:auto;line-height:1.5;max-width:100%}
+pre code{background:none;padding:0}
+.figrow{display:flex;flex-wrap:wrap;gap:24px;margin-top:24px;align-items:flex-start}
+figure{margin:0;flex:1 1 300px;max-width:430px}
+figure img{border:1px solid var(--rule);border-radius:10px;display:block;background:var(--surface)}
+figcaption{font-size:14px;color:var(--muted);margin-top:8px}
+.diagram{margin-top:24px;background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:16px;overflow-x:auto}
+.diagram svg{display:block;min-width:640px;width:100%;height:auto}
+.diagram text{font-family:var(--f-body);font-size:13px;fill:var(--ink)}
+.diagram .sub{fill:var(--muted);font-size:11.5px}
+.diagram .box{fill:var(--bg);stroke:var(--rule);stroke-width:1.5}
+.diagram .box.hot{stroke:var(--accent);fill:var(--accent-soft)}
+.diagram .box.bad{stroke:var(--danger);fill:var(--danger-soft)}
+.diagram .arrow{stroke:var(--muted);stroke-width:1.5;fill:none;marker-end:url(#ah)}
+.diagram .loop{stroke:var(--accent);stroke-dasharray:4 4}
+table{border-collapse:collapse;width:100%;margin-top:16px;font-size:15px;background:var(--surface);border:1px solid var(--rule);border-radius:8px;overflow:hidden;display:block;overflow-x:auto}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-family:var(--f-display);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+tr:last-child td{border-bottom:none}
+td:first-child{white-space:nowrap}
+.note{background:var(--warn-soft);border-left:4px solid var(--warn);padding:12px 16px;border-radius:0 8px 8px 0;margin-top:20px}
+.note p{margin:0}
+.qa{margin-top:28px;background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:18px 22px}
+.qa h3{margin-top:0;font-size:18px}
+.qa .who{font-size:13px;color:var(--muted);font-family:var(--f-mono);margin:6px 0 10px}
+.qa blockquote{margin:0 0 12px;padding-left:12px;border-left:3px solid var(--rule);color:var(--muted);font-style:italic}
+.qa p:last-child{margin-bottom:0}
+.pill{display:inline-block;font-family:var(--f-mono);font-size:12px;padding:1px 8px;border-radius:9px;background:var(--danger-soft);color:var(--danger)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.info{background:var(--accent-soft);color:var(--accent)}
+footer{margin-top:72px;font-size:14px;color:var(--muted);border-top:1px solid var(--rule);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <p>Contents</p>
+  <ol>
+    <li><a href="#what">What it does</a></li>
+    <li><a href="#pipeline">Pipeline</a></li>
+    <li><a href="#detect">Detecting broken refs</a></li>
+    <li><a href="#fingerprints">Fingerprints</a></li>
+    <li><a href="#matching">Matching</a></li>
+    <li><a href="#repair">Repair</a></li>
+    <li><a href="#faq">Developer questions</a></li>
+    <li><a href="#limits">Limitations</a></li>
+    <li><a href="#code">Code map</a></li>
+    <li><a href="#tests">Tests</a></li>
+  </ol>
+</nav>
+<main>
+<p class="eyebrow">FreeCAD addon · how it works</p>
+<h1>Resolve_Mode internals</h1>
+<p class="lede">How a pure-Python addon finds PartDesign references that the topological naming algorithm could not keep, suggests replacements by geometric similarity, and relinks them, without storing any old shapes.</p>
+<div class="meta">
+  <span><b>Targets</b> FreeCAD 1.1+ (tested on 27.1 dev, 2026.11.04)</span>
+  <span><b>Scope</b> PartDesign</span>
+  <span><b>Core changes</b> none, Python only</span>
+  <span><b>License</b> LGPL-2.1-or-later</span>
+</div>
+
+<h2 id="what">What it does</h2>
+<p>When a recompute leaves a feature pointing at an edge or face that no longer exists, Resolve_Mode opens a panel listing every broken reference. Each one gets one of three outcomes:</p>
+<ul>
+  <li><span class="pill info">suggest</span> one element clearly matches what was referenced before. You can preview it in the 3D view and accept it, or accept all suggestions at once.</li>
+  <li><span class="pill warn">ambiguous</span> several elements are plausible, for example because an edge was split in two. The panel lists the candidates with their scores, and you choose one.</li>
+  <li><span class="pill">none</span> nothing is close enough. You pick the replacement in the 3D view, or open the feature in its normal FreeCAD editor.</li>
+</ul>
+<p>The panel opens automatically after a recompute that breaks something. You can switch that off in the panel or in the preferences, and open the panel from the PartDesign toolbar instead.</p>
+<div class="figrow">
+  <figure><img src="images/panel.png" width="430" height="796" alt="Resolve Mode panel listing three broken references: two with a suggested match at 89% similarity and one with five candidates within tolerance"><figcaption>Three broken references after the sketch profile was redrawn.</figcaption></figure>
+  <figure><img src="images/panel-candidates.png" width="430" height="796" alt="The ambiguous card expanded, listing candidate edges with similarity bars from 78% down to 58%, each with preview and accept buttons"><figcaption>An ambiguous match: the original edge was split into two, so no single candidate wins.</figcaption></figure>
+</div>
+
+<h2 id="pipeline">Pipeline</h2>
+<p>A single document observer drives everything. Observer slots only record which document changed. The actual work runs on the Qt event loop after the recompute has finished, and is postponed while <code>doc.Recomputing</code> is true, because FreeCAD pumps events during a recompute.</p>
+<div class="diagram" role="img" aria-label="Pipeline: recompute, then the observer runs after a debounce, captures fingerprints for healthy references, detects broken references, matches them, and shows the panel. Accepting relinks in one transaction and recomputes, which loops back to the start.">
+<svg viewBox="0 0 900 250" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor" style="fill:var(--muted)"/></marker></defs>
+  <rect class="box" x="10" y="30" width="130" height="66" rx="10"/>
+  <text x="75" y="58" text-anchor="middle">Recompute</text>
+  <text class="sub" x="75" y="78" text-anchor="middle">user edit / undo / save</text>
+  <rect class="box" x="180" y="30" width="140" height="66" rx="10"/>
+  <text x="250" y="58" text-anchor="middle">Observer</text>
+  <text class="sub" x="250" y="78" text-anchor="middle">debounced, after recompute</text>
+  <rect class="box hot" x="360" y="30" width="150" height="66" rx="10"/>
+  <text x="435" y="58" text-anchor="middle">Capture</text>
+  <text class="sub" x="435" y="78" text-anchor="middle">fingerprint healthy refs</text>
+  <rect class="box bad" x="550" y="30" width="150" height="66" rx="10"/>
+  <text x="625" y="58" text-anchor="middle">Detect</text>
+  <text class="sub" x="625" y="78" text-anchor="middle">"?Edge14", index gone</text>
+  <rect class="box" x="740" y="30" width="150" height="66" rx="10"/>
+  <text x="815" y="58" text-anchor="middle">Match</text>
+  <text class="sub" x="815" y="78" text-anchor="middle">score every candidate</text>
+  <rect class="box hot" x="560" y="160" width="330" height="66" rx="10"/>
+  <text x="725" y="188" text-anchor="middle">Panel: preview · accept · pick in 3D</text>
+  <text class="sub" x="725" y="208" text-anchor="middle">auto-opens if anything is broken</text>
+  <rect class="box" x="180" y="160" width="330" height="66" rx="10"/>
+  <text x="345" y="188" text-anchor="middle">Relink in one transaction, then recompute</text>
+  <text class="sub" x="345" y="208" text-anchor="middle">one undo step per action</text>
+  <path class="arrow" d="M140 63H178"/>
+  <path class="arrow" d="M320 63H358"/>
+  <path class="arrow" d="M510 63H548"/>
+  <path class="arrow" d="M700 63H738"/>
+  <path class="arrow" d="M815 96V158"/>
+  <path class="arrow" d="M560 193H512"/>
+  <path class="arrow loop" d="M180 193H75V98"/>
+</svg>
+</div>
+
+<h2 id="detect">Detecting broken references</h2>
+<p>The scan covers every <code>PartDesign::*</code> feature, every sketch, and anything else inside a <code>PartDesign::Body</code>. For each, it reads all properties whose type starts with <code>App::PropertyLinkSub</code>: fillet and chamfer <code>Base</code>, pocket and pad <code>UpToFace</code>, <code>AttachmentSupport</code>, pattern directions, mirror planes, sketch <code>ExternalGeometry</code>, and so on. It only looks at <code>Edge</code>, <code>Face</code> and <code>Vertex</code> entries.</p>
+<p>An entry counts as broken when either of these is true:</p>
+<ol>
+  <li>FreeCAD marked it missing. When the element map can't resolve the stored mapped name, the Python value carries a <code>?</code> prefix:
+<pre><code>&gt;&gt;&gt; App.ActiveDocument.Fillet.Base
+(&lt;PartDesign::Pad&gt;, ['Edge4', 'Edge7', '?Edge10', 'Edge15'])</code></pre></li>
+  <li>The index is out of range for the target shape, for example <code>Face9</code> on a shape that now has 7 faces.</li>
+</ol>
+<p>If the <em>target</em> itself failed to recompute, the reference is marked <span class="pill warn">blocked</span> and isn't matched. Its geometry isn't trustworthy until the upstream feature is fixed. Once that happens, the next scan picks it up with real candidates, so cascades resolve top-down.</p>
+
+<h2 id="fingerprints">Fingerprints instead of old shapes</h2>
+<p>Matching needs to know what the lost element looked like. Resolve_Mode doesn't keep the old shape. After every successful recompute, it stores a small fingerprint of each <em>referenced</em> element:</p>
+<table>
+  <thead><tr><th>Field</th><th>Edge</th><th>Face</th><th>Vertex</th></tr></thead>
+  <tbody>
+    <tr><td><code>t</code> type</td><td>curve class (<code>Line</code>, <code>Circle</code>, <code>BSplineCurve</code>…)</td><td>surface class (<code>Plane</code>, <code>Cylinder</code>…)</td><td><code>Point</code></td></tr>
+    <tr><td><code>s</code> size</td><td>length</td><td>area</td><td>none</td></tr>
+    <tr><td><code>c</code> centre</td><td colspan="2">centre of mass</td><td>point</td></tr>
+    <tr><td><code>d</code> direction</td><td>line direction or circle axis (unsigned)</td><td>oriented plane normal, or cylinder/cone axis</td><td>none</td></tr>
+    <tr><td><code>r</code> radius</td><td>circle radius</td><td>cylinder or sphere radius, torus major radius</td><td>none</td></tr>
+  </tbody>
+</table>
+<p>They live in one hidden <code>App::PropertyMap</code> called <code>ResolveModeSignatures</code> on the referencing feature, keyed by <code>property|target|element</code>. Here are the actual entries from the test model:</p>
+<pre><code>Base|Pad|Edge13              {"c":[10.0,12.0,5.0],"d":[-1.0,0.0,0.0],"k":"Edge","r":null,"s":20.0,"t":"Line"}
+AttachmentSupport|Pad|Face4  {"c":[10.0,12.0,2.5],"d":[-0.0,1.0,-0.0],"k":"Face","o":true,"r":null,"s":100.0,"t":"Plane"}</code></pre>
+<p>Details that matter:</p>
+<ul>
+  <li><b>Property status</b> is <code>Hidden | Output | NoRecompute</code>. Writing it never touches the feature and never triggers a recompute (this is covered by a test).</li>
+  <li><b>Broken entries keep their pre-break fingerprint.</b> On the first capture after a break, the old fingerprint moves to a <code>?</code>-prefixed key (<code>Base|Pad|?Edge10</code>). A healthy reference that later gets renumbered to <code>Edge10</code> therefore can't overwrite it.</li>
+  <li><b>Timing:</b> capture runs after each document recompute, after undo and redo, and when a save starts, so files saved without a recompute are covered too. It only writes when something changed.</li>
+  <li><b>No addon, no problem:</b> it's a standard dynamic property, so the file opens normally in a FreeCAD without Resolve_Mode.</li>
+</ul>
+
+<h2 id="matching">Matching</h2>
+<p>For a broken reference, every element of the same kind on the same target is fingerprinted on the fly and scored against the stored fingerprint. Elements already used by other entries of the same property are skipped, so a fillet never suggests an edge it already has. The score is a weighted mean of the components both fingerprints have. Missing components are left out and the remaining weights renormalized.</p>
+<table>
+  <thead><tr><th>Component</th><th>Weight</th><th>Score</th></tr></thead>
+  <tbody>
+    <tr><td>position</td><td>0.35</td><td><code>exp(−distance / (0.25 × model diagonal))</code>, so geometry that moved with a dimension change still scores well</td></tr>
+    <tr><td>size</td><td>0.25</td><td><code>min/max</code> of length or area</td></tr>
+    <tr><td>type</td><td>0.15</td><td>1 if the same class, otherwise 0.3</td></tr>
+    <tr><td>direction</td><td>0.15</td><td><code>|cos|</code> for axes and lines. For oriented plane normals <code>max(0, cos)</code>, so a flipped face scores 0</td></tr>
+    <tr><td>radius</td><td>0.10</td><td><code>min/max</code></td></tr>
+  </tbody>
+</table>
+<p>The ranked list is then classified using three thresholds you can change in the preferences:</p>
+<ul>
+  <li><b>suggest</b>: the best score is at least 80% <em>and</em> beats the runner-up by at least 8 points.</li>
+  <li><b>ambiguous</b>: at least one element scores 55% or more, but none qualifies as a suggestion.</li>
+  <li><b>none</b>: nothing reaches 55%.</li>
+</ul>
+<p>The runner-up rule is deliberate. When one edge splits into two, both halves score about the same. The panel shows that as "no confident match" instead of guessing.</p>
+<h3>Fallback for sketches with no stored fingerprint</h3>
+<p>For a sketch attached in <code>FlatFace</code> mode, the sketch's own placement still records where the face was: <code>Placement × AttachmentOffset⁻¹</code>. The addon builds a plane-only fingerprint from it and scores candidates by their distance to that plane and their normal. This works even on files that broke before Resolve_Mode was installed.</p>
+
+<h2 id="repair">Repair</h2>
+<ul>
+  <li><b>Relink</b> rewrites only the broken entry and writes the rest of the property back unchanged, including other entries that are still marked <code>?</code> and get fixed later (this is tested). Before writing, it checks that the entry still holds the element it was scanned with. If not, it raises <code>StaleReference</code> and nothing is written.</li>
+  <li><b>Undo:</b> each action is one transaction (<code>Resolve_Mode: Edge10 -&gt; Edge13</code>, or <code>relink 2 references</code> for Accept all), committed before the recompute.</li>
+  <li><b>Pick in 3D view</b> temporarily shows the target feature and hides its visible siblings in the Body, so clicks land on the right shape. A selection observer then accepts the first element of the right kind on that target. Visibility is restored afterwards.</li>
+  <li><b>Resolve manually</b> hands the feature to FreeCAD's own editor: <code>setEdit</code>, or Attachment Editor for <code>AttachmentSupport</code>.</li>
+  <li><b>Preview</b> is a temporary Coin <code>SoAnnotation</code> added to the view's scene graph. It shows the candidate in blue and a red marker at the old centre. Nothing is added to the document.</li>
+</ul>
+
+<h2 id="faq">Questions from the topological naming developers</h2>
+<p>These come from the forum thread <em>[PROPOSAL] A "Broken References" resolver panel</em> (August 2026).</p>
+
+<div class="qa">
+  <h3>Doesn't this need the old shape stored before every change? How do you avoid using too much RAM?</h3>
+  <p class="who">raised by hypocritical (drwho495)</p>
+  <blockquote>if we need to store the old shape before any changes, how will we do that without using up too much RAM?</blockquote>
+  <p>No shapes are stored, old or new. Only referenced elements get a fingerprint: a handful of numbers, measured at <b>92–119 bytes</b> per entry as JSON in the test models. A model with 1,000 element references carries about 100 kB of strings, inside the compressed <code>.FCStd</code>. While the model is healthy, nothing is kept in memory beyond that property. Candidate fingerprints are computed only for the target of a broken reference, while the panel is building, and then discarded.</p>
+</div>
+
+<div class="qa">
+  <h3>Is this UI-only work, or does it need an API addition first?</h3>
+  <p class="who">raised in the thread</p>
+  <p>It's UI-only. Everything uses Python APIs FreeCAD already has:</p>
+  <ul>
+    <li>the <code>?</code> marker on missing sub-element names</li>
+    <li><code>Shape.countElement</code> / <code>getElement</code></li>
+    <li><code>CenterOfMass</code>, <code>Curve</code>, <code>Surface</code></li>
+    <li>dynamic properties with status bits</li>
+    <li>document observers and transactions</li>
+    <li>Coin through pivy</li>
+  </ul>
+  <p>No C++ changes are needed. If this moved into core, the matcher would be a natural fit for <code>App::GeoFeature</code>, next to <code>findSimilarNames</code>.</p>
+</div>
+
+<div class="qa">
+  <h3>Shouldn't references that go missing be fixed in the topological naming algorithm instead?</h3>
+  <p class="who">raised by hypocritical (drwho495)</p>
+  <blockquote>References going missing when they shouldn't is an issue that should be dealt with in the topological naming algorithm (and maybe in the name matcher).</blockquote>
+  <p>Agreed, and Resolve_Mode doesn't compete with it. It only acts on references FreeCAD has already given up on. The common case is the one MisterMaker describes: the user removed or redrew the geometry, so the element <em>legitimately</em> no longer exists and no naming algorithm should invent a mapping. Every improvement to the naming algorithm shrinks the set of references Resolve_Mode ever sees, which is the goal.</p>
+</div>
+
+<div class="qa">
+  <h3>How does it relate to <code>doNamesMatch</code> / <code>findSimilarNames</code> from the V2 PR?</h3>
+  <p class="who">raised by hypocritical (drwho495)</p>
+  <p>They run at different stages. The V2 name matcher decides whether two <em>names</em> mean the same element and returns a yes or no. Resolve_Mode starts only after that has failed, and compares <em>geometry</em>: it ranks elements and gives a confidence. As drwho495 notes, the name matcher has no useful information to return when names don't match. Resolve_Mode fills that gap with type, size, position, direction and radius.</p>
+  <p>These methods aren't exposed in the 27.1 dev build tested here (2026.11.04). If they land, Resolve_Mode needs no change: anything they resolve never shows up with a <code>?</code>.</p>
+</div>
+
+<div class="qa">
+  <h3>FreeCAD doesn't tell users that something broke.</h3>
+  <p class="who">MisterMaker, and issues <a href="https://github.com/FreeCAD/FreeCAD/issues/20686">#20686</a>, <a href="https://github.com/FreeCAD/FreeCAD/issues/27546">#27546</a></p>
+  <blockquote>the software pretty much need to take them by the hand sit them down and tell them to FIX IT before they make a mess of it.</blockquote>
+  <p>That's the reason for auto mode, which is on by default. After any recompute that leaves a broken reference, the panel opens once with the list. It doesn't nag: if the user closes it, it stays closed until the set of broken references changes. A checkbox in the panel header turns auto mode off.</p>
+</div>
+
+<div class="qa">
+  <h3>Would a unified selection system change this?</h3>
+  <p class="who">raised by hypocritical (drwho495)</p>
+  <p>It would make "Pick in 3D view" simpler. Today the addon briefly shows the target feature so the user's click resolves to the right object. With a selection system that can resolve a click on the tip into an element of an earlier feature, that step goes away. Detection and matching are independent of selection.</p>
+</div>
+
+<div class="qa">
+  <h3>Can there be a simplified version without stored data?</h3>
+  <p class="who">MisterMaker</p>
+  <blockquote>if this can cause issues I would say we make a simplified version without it.</blockquote>
+  <p>Yes. Fingerprints are a preference (<em>Remember the geometry of referenced elements</em>). Without them you still get detection, the auto-opening panel, blocked and cascade handling, pick in 3D, Resolve manually, and the sketch-plane fallback. Only the suggestions for edges and faces depend on stored data.</p>
+</div>
+
+<div class="qa">
+  <h3>What does it cost on large models?</h3>
+  <p class="who">anticipated</p>
+  <p>Capture is linear in the number of element references. For each one it reads the element and computes its centre of mass, length or area. It runs once per finished recompute, debounced, never during the recompute. Matching is linear in the number of elements of one kind on one target, and only runs for broken references when the panel is shown.</p>
+</div>
+
+<h2 id="limits">Limitations</h2>
+<ul>
+  <li><b>Fingerprints are local, not topological.</b> Adjacency isn't compared, so two congruent, nearby elements can tie. The tie shows up as "ambiguous" rather than a wrong suggestion, but a smarter tie-breaker using neighbouring faces would help.</li>
+  <li><b>Splits and merges have no single answer.</b> A reference to an edge that became two edges is always ambiguous, by design.</li>
+  <li><b>History starts at install.</b> References that were already broken when the addon first saw the file have no fingerprint. Only the sketch-plane fallback and manual picking work for those.</li>
+  <li><b>Same target only.</b> A broken entry is relinked to an element of the same object it pointed to. Switching a reference to a different feature still needs the feature's own editor.</li>
+  <li><b>Scope.</b> PartDesign objects only. Part workbench features, Assembly joints and Draft are not scanned.</li>
+  <li><b>Pick mode toggles visibility.</b> Visibility is restored afterwards, but the document may be marked modified.</li>
+</ul>
+
+<h2 id="code">Code map</h2>
+<table>
+  <thead><tr><th>File</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td><code>core/signature.py</code></td><td>Fingerprint format, <code>score()</code>, <code>classify()</code>. Pure Python with no FreeCAD dependency, unit-tested.</td></tr>
+    <tr><td><code>references.py</code></td><td>Scope, reading and writing link properties, detection, capture, candidates, <code>relink()</code>, transactions. Console-safe (no GUI imports).</td></tr>
+    <tr><td><code>gui/controller.py</code></td><td>Document observer, debounce, auto-open, applying fixes, dismissed-state tracking.</td></tr>
+    <tr><td><code>gui/panel.py</code></td><td>The dock widget and cards. Colors come from the Qt palette, so light and dark themes both work.</td></tr>
+    <tr><td><code>gui/highlight.py</code></td><td>Coin preview overlay.</td></tr>
+    <tr><td><code>gui/picker.py</code></td><td>Selection observer and visibility isolation for Pick in 3D view.</td></tr>
+    <tr><td><code>init_gui.py</code></td><td>Registers the command, the PartDesign toolbar (through a workbench manipulator), the Tools menu entry, the preference page and the observer.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="tests">Tests</h2>
+<ul>
+  <li><code>tests/test_signature.py</code>: pytest, no FreeCAD needed. Covers scoring and classification: moved versus far geometry, flipped normals, radius, the plane fallback, and JSON round-trips.</li>
+  <li><code>tests/fc_scenario.py</code>: run with <code>freecadcmd tests/fc_scenario.py</code>. Builds real PartDesign models and breaks them by redrawing sketch geometry. It checks that:
+    <ul>
+      <li>fingerprints survive the break and capturing doesn't touch the feature</li>
+      <li>moved geometry is suggested and split geometry isn't</li>
+      <li>several broken entries in one property are handled</li>
+      <li>relinking works and each relink is one undo step</li>
+      <li>the sketch-plane fallback produces candidates</li>
+    </ul></li>
+</ul>
+<pre><code>python -m pytest -q tests
+freecadcmd tests/fc_scenario.py</code></pre>
+
+<footer>Resolve_Mode · <a href="https://github.com/avongil/FreeCAD-Resolve_Mode">source on GitHub</a> · LGPL-2.1-or-later</footer>
+</main>
+</div>
+</body>
+</html>

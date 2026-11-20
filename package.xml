@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
+  <name>Resolve_Mode</name>
+  <description>Finds broken PartDesign references (missing edges/faces, broken sketch attachments) and suggests replacements by geometric similarity. Preview, accept, or pick the replacement in the 3D view from one panel.</description>
+  <version>0.1.0</version>
+  <date>2026-11-19</date>
+
+  <maintainer email="6765151+avongil@users.noreply.github.com">avongil</maintainer>
+  <author email="6765151+avongil@users.noreply.github.com">avongil</author>
+  <license file="LICENSE">LGPL-2.1-or-later</license>
+
+  <icon>freecad/Resolve_Mode/resources/icons/Resolve_Mode.svg</icon>
+  <freecadmin>1.1.0</freecadmin>
+  <pythonmin>3.11</pythonmin>
+
+  <url type="repository" branch="main">https://github.com/avongil/FreeCAD-Resolve_Mode</url>
+  <url type="readme">https://raw.githubusercontent.com/avongil/FreeCAD-Resolve_Mode/main/README.md</url>
+  <url type="bugtracker">https://github.com/avongil/FreeCAD-Resolve_Mode/issues</url>
+  <url type="documentation">https://avongil.github.io/FreeCAD-Resolve_Mode/</url>
+
+  <content>
+    <other/>
+  </content>
+
+  <depend type="internal">PartDesign</depend>
+
+  <tag>partdesign</tag>
+  <tag>topological naming</tag>
+  <tag>references</tag>
+  <tag>repair</tag>
+  <tag>workflow</tag>
+</package>

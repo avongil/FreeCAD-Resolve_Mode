@@ -1,0 +1,23 @@
+[project]
+name = "freecad-resolve-mode"
+version = "0.1.0"
+description = "Find and repair broken PartDesign references in FreeCAD"
+readme = "README.md"
+license = "LGPL-2.1-or-later"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = ["ruff", "bandit", "pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
