@@ -30,14 +30,18 @@ class Controller:
         self._pending: set[str] = set()
         self._timer = None
         self._busy = False
+        self._suppress = False  # True while a preview recomputes: not a user change
         self._dismissed: dict[str, frozenset] = {}  # doc -> broken set the user closed the panel on
 
     # -- document observer slots (App.addDocumentObserver) ----------------
 
     def slotRecomputedDocument(self, doc):
-        self._schedule(doc.Name)
+        if not self._suppress:
+            self._schedule(doc.Name)
 
     def slotRecomputedObject(self, obj):
+        if self._suppress:
+            return
         try:
             self._schedule(obj.Document.Name)
         except Exception:
@@ -58,9 +62,9 @@ class Controller:
         self._pending.discard(name)
         self._dismissed.pop(name, None)
         if self.picker.active and self.picker.ref.doc == name:
-            self.picker.ref = None  # document is going away; nothing to restore
+            self.picker.forget()  # document is going away; nothing to restore
         if self.highlighter.current is not None:
-            self.highlighter.clear()
+            self.highlighter.forget()
         if self._panel_visible() and self.panel.doc_name == name:
             QtCore.QTimer.singleShot(0, self._show_active)
 
@@ -183,13 +187,41 @@ class Controller:
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(obj)
 
-    def preview(self, issue: R.Issue, element: str | None):
-        fp = issue.fingerprint
-        old = fp.get("c") if fp and not issue.from_plane else None
+    def preview(self, issue: R.Issue, element: str, mode: str) -> str:
+        """Show ``element`` for ``issue``. Returns an error message, or "" on success.
+
+        mode "base": the element on the feature the reference points at.
+        mode "result": the referencing feature regenerated with the element.
+        """
+        self.picker.stop()
+        if self.panel is not None:
+            self.panel.pick_ended()
         try:
-            self.highlighter.show(issue.ref, element, old_point=old)
+            if mode == "base":
+                fp = issue.fingerprint
+                old = fp.get("c") if fp and not issue.from_plane else None
+                self.highlighter.show_on_base(issue.ref, element, old_point=old)
+                return ""
+            if self._busy:
+                return translate("Resolve_Mode", "Busy, try again")
+            if Gui.Control.activeDialog():
+                return translate("Resolve_Mode", "Close the open task dialog first")
+            self.highlighter.clear()  # restore visibility before recomputing
+            self._suppress = True
+            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+            try:
+                result = R.preview_shape(issue.ref, element)
+            finally:
+                QtWidgets.QApplication.restoreOverrideCursor()
+                self._suppress = False
+            if result.shape is None:
+                return translate("Resolve_Mode", "Preview failed: {err}").format(err=result.error)
+            self.highlighter.show_result(issue.ref, element, result.shape)
+            return ""
         except Exception as exc:
             App.Console.PrintWarning(f"[Resolve_Mode] preview failed: {exc}\n")
+            self.highlighter.clear()
+            return translate("Resolve_Mode", "Preview failed: {err}").format(err=exc)
 
     def clear_preview(self):
         self.highlighter.clear()

@@ -1,6 +1,6 @@
 [project]
 name = "freecad-resolve-mode"
-version = "0.1.1"
+version = "0.2.0"
 description = "Find and repair broken PartDesign references in FreeCAD"
 readme = "README.md"
 license = "LGPL-2.1-or-later"

@@ -103,6 +103,64 @@ def _scaled_font(widget, factor: float, bold=False) -> QtGui.QFont:
     return f
 
 
+class FlowLayout(QtWidgets.QLayout):
+    """Lays widgets out left to right and wraps to a new row when out of width."""
+
+    def __init__(self, parent=None, spacing=8):
+        super().__init__(parent)
+        self._items = []
+        self._spacing = spacing
+        self.setContentsMargins(0, 0, 0, 0)
+
+    def addItem(self, item):
+        self._items.append(item)
+
+    def count(self):
+        return len(self._items)
+
+    def itemAt(self, i):
+        return self._items[i] if 0 <= i < len(self._items) else None
+
+    def takeAt(self, i):
+        return self._items.pop(i) if 0 <= i < len(self._items) else None
+
+    def expandingDirections(self):
+        return QtCore.Qt.Orientations(0)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return self._do_layout(QtCore.QRect(0, 0, width, 0), True)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._do_layout(rect, False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        size = QtCore.QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        return size
+
+    def _do_layout(self, rect, test_only):
+        x, y, row_h = rect.x(), rect.y(), 0
+        for item in self._items:
+            hint = item.sizeHint()
+            if x + hint.width() > rect.right() + 1 and row_h > 0:
+                x = rect.x()
+                y += row_h + self._spacing
+                row_h = 0
+            if not test_only:
+                item.setGeometry(QtCore.QRect(QtCore.QPoint(x, y), hint))
+            x += hint.width() + self._spacing
+            row_h = max(row_h, hint.height())
+        return y + row_h - rect.y()
+
+
 def describe(ref: R.Ref) -> str:
     kind = ref.kind.lower()
     if ref.prop == "AttachmentSupport":
@@ -165,8 +223,7 @@ class Card(QtWidgets.QFrame):
         lay.addWidget(self.info)
 
         # buttons
-        self.buttons = QtWidgets.QHBoxLayout()
-        self.buttons.setSpacing(8)
+        self.buttons = FlowLayout(spacing=8)
         lay.addSpacing(4)
         lay.addLayout(self.buttons)
 
@@ -255,9 +312,8 @@ class Card(QtWidgets.QFrame):
                 )
             )
         elif v is not None and v.status == "suggest":
-            prev = self._btn(translate("Resolve_Mode", "Preview"), "eye", None, checkable=True)
-            prev.toggled.connect(lambda on, b=prev: self.panel.preview(self, b, v.best.name, on))
-            self.buttons.addWidget(prev)
+            self.buttons.addWidget(self._preview_btn(v.best.name, "result", translate("Resolve_Mode", "Preview")))
+            self.buttons.addWidget(self._preview_btn(v.best.name, "base", translate("Resolve_Mode", "Highlight")))
             self.buttons.addWidget(
                 self._btn(translate("Resolve_Mode", "Accept"), "check", lambda: self.panel.accept([(ref, v.best.name)]))
             )
@@ -268,7 +324,46 @@ class Card(QtWidgets.QFrame):
         if not ref.blocked:
             self.pick_btn = self._btn(translate("Resolve_Mode", "Pick in 3D view"), "hand", self._pick, checkable=True)
             self.buttons.addWidget(self.pick_btn)
-        self.buttons.addStretch(1)
+
+    def _preview_btn(self, element: str, mode: str, text: str = ""):
+        """Toggle showing ``element`` as a regen preview ("result") or on the base geometry ("base")."""
+        ref = self.issue.ref
+        obj, target = ref.resolve()
+        olabel = obj.Label if obj else ref.obj
+        tlabel = target.Label if target else ref.target
+        if mode == "result":
+            b = self._btn(text, "eye", None, checkable=True)
+            tip = translate("Resolve_Mode", "Show {obj} as it would regenerate with {el}. Nothing is changed.")
+            b.setToolTip(tip.format(obj=olabel, el=element))
+        else:
+            b = self._btn(text, "target", None, checkable=True)
+            tip = translate("Resolve_Mode", "Highlight {el} on {target}, the geometry before {obj}")
+            b.setToolTip(tip.format(el=element, target=tlabel, obj=olabel))
+        b.toggled.connect(lambda on, btn=b: self.panel.preview(self, btn, element, on, mode))
+        return b
+
+    def show_preview_info(self, element: str, mode: str):
+        th = self.panel.theme
+        ref = self.issue.ref
+        obj, target = ref.resolve()
+        olabel = obj.Label if obj else ref.obj
+        tlabel = target.Label if target else ref.target
+        if mode == "result":
+            text = translate(
+                "Resolve_Mode", "Previewing {obj} regenerated with {el}. Later features are hidden; nothing is changed."
+            ).format(obj=olabel, el=element)
+            self._set_info("eye", th.highlight, text)
+        else:
+            text = translate(
+                "Resolve_Mode", "{el} highlighted on {target}, the geometry before {obj}. Red ring: where {old} was."
+            ).format(el=element, target=tlabel, obj=olabel, old=ref.element)
+            self._set_info("target", th.highlight, text)
+
+    def show_error(self, text: str):
+        self._set_info("alert", self.panel.theme.danger, text)
+
+    def reset_info(self):
+        self._set_info(*self._info_state())
 
     def _toggle_candidates(self, on: bool):
         if on and self.cand_box.layout().count() == 0:
@@ -297,11 +392,10 @@ class Card(QtWidgets.QFrame):
             bar.setMaximumWidth(110)
             rl.addWidget(bar)
             rl.addStretch(1)
-            prev = self._btn("", "eye", None, checkable=True)
-            prev.setToolTip(translate("Resolve_Mode", "Preview {el}").format(el=cand.name))
-            prev.toggled.connect(lambda on, b=prev, el=cand.name: self.panel.preview(self, b, el, on))
-            self.cand_previews.append(prev)
-            rl.addWidget(prev)
+            for mode in ("result", "base"):
+                b = self._preview_btn(cand.name, mode)
+                self.cand_previews.append(b)
+                rl.addWidget(b)
             acc = self._btn("", "check", lambda _=False, el=cand.name: self.panel.accept([(ref, el)]))
             acc.setToolTip(translate("Resolve_Mode", "Use {el}").format(el=cand.name))
             rl.addWidget(acc)
@@ -354,6 +448,7 @@ class Panel:
         self.issues: list[R.Issue] = []
         self.cards: list[Card] = []
         self._checked_preview: QtWidgets.QPushButton | None = None
+        self._preview_card: Card | None = None
         self._picking_card: Card | None = None
 
         self.dock = _Dock(self, main_window)
@@ -431,6 +526,7 @@ class Panel:
     def set_issues(self, doc_name: str | None, doc_label: str, issues: list[R.Issue], auto: bool):
         self.controller.clear_preview()
         self._checked_preview = None
+        self._preview_card = None
         self._picking_card = None
         self.doc_name = doc_name
         self.issues = issues
@@ -483,19 +579,34 @@ class Panel:
 
     # -- actions -----------------------------------------------------------
 
-    def preview(self, card: Card, button, element: str, on: bool):
+    def preview(self, card: Card, button, element: str, on: bool, mode: str):
         if on:
-            if self._checked_preview is not None and self._checked_preview is not button:
-                prev = self._checked_preview
-                self._checked_preview = None
-                prev.blockSignals(True)
-                prev.setChecked(False)
-                prev.blockSignals(False)
+            self._uncheck_preview(except_button=button)
             self._checked_preview = button
-            self.controller.preview(card.issue, element)
+            self._preview_card = card
+            error = self.controller.preview(card.issue, element, mode)
+            if error:
+                self._uncheck_preview()
+                card.show_error(error)
+            else:
+                card.show_preview_info(element, mode)
         elif self._checked_preview is button:
             self._checked_preview = None
+            self._preview_card = None
             self.controller.clear_preview()
+            card.reset_info()
+
+    def _uncheck_preview(self, except_button=None):
+        prev, card = self._checked_preview, self._preview_card
+        if prev is None or prev is except_button:
+            return
+        prev.blockSignals(True)
+        prev.setChecked(False)
+        prev.blockSignals(False)
+        if card is not None:
+            card.reset_info()
+        self._checked_preview = None
+        self._preview_card = None
 
     def accept(self, fixes):
         self.controller.apply(fixes)
@@ -514,6 +625,8 @@ class Panel:
         self.controller.edit_manually((pending or self.issues)[0])
 
     def start_pick(self, card: Card):
+        self._uncheck_preview()
+        self.controller.clear_preview()
         if self._picking_card is not None and self._picking_card is not card:
             self._picking_card.set_picking(False)
         self._picking_card = card

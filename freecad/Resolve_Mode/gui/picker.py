@@ -12,6 +12,7 @@ import FreeCADGui as Gui
 import FreeCAD as App
 
 from .. import references as R
+from .isolate import Isolation
 from .qt import QtCore
 
 translate = App.Qt.translate
@@ -31,8 +32,7 @@ class Picker:
         self.ref: R.Ref | None = None
         self._on_pick = None
         self._on_hint = None
-        self._hidden: list[str] = []
-        self._shown: str | None = None
+        self._iso = Isolation()
         self._pending = False
 
     @property
@@ -49,7 +49,7 @@ class Picker:
         self.ref = ref
         self._on_pick = on_pick
         self._on_hint = on_hint
-        self._isolate(target)
+        self._iso.isolate(target, show=target)
         Gui.Selection.clearSelection()
         Gui.Selection.addObserver(self)
 
@@ -60,41 +60,21 @@ class Picker:
             Gui.Selection.removeObserver(self)
         except Exception:
             pass
-        self._restore()
+        self._iso.restore()
         self.ref = None
         self._on_pick = None
         self._on_hint = None
 
-    # -- visibility --------------------------------------------------------
-
-    def _isolate(self, target):
-        doc = target.Document
-        body = target.getParentGeoFeatureGroup()
-        siblings = body.Group if body is not None else doc.Objects
-        self._hidden = []
-        for o in siblings:
-            vo = getattr(o, "ViewObject", None)
-            if o is not target and vo is not None and vo.Visibility and hasattr(o, "Shape"):
-                vo.Visibility = False
-                self._hidden.append(o.Name)
-        vo = target.ViewObject
-        self._shown = None
-        if vo is not None and not vo.Visibility:
-            vo.Visibility = True
-            self._shown = target.Name
-
-    def _restore(self):
-        doc = App.getDocument(self.ref.doc) if self.ref else None
-        if doc is None:
-            return
-        if self._shown and (o := doc.getObject(self._shown)) is not None and o.ViewObject:
-            o.ViewObject.Visibility = False
-        for name in self._hidden:
-            o = doc.getObject(name)
-            if o is not None and o.ViewObject is not None:
-                o.ViewObject.Visibility = True
-        self._hidden = []
-        self._shown = None
+    def forget(self):
+        """The document is closing: stop without touching it."""
+        try:
+            Gui.Selection.removeObserver(self)
+        except Exception:
+            pass
+        self._iso.forget()
+        self.ref = None
+        self._on_pick = None
+        self._on_hint = None
 
     # -- selection observer ------------------------------------------------
 

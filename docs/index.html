@@ -117,13 +117,13 @@ footer{margin-top:72px;font-size:14px;color:var(--muted);border-top:1px solid va
 <h2 id="what">What it does</h2>
 <p>When a recompute leaves a feature pointing at an edge or face that no longer exists, Resolve_Mode opens a panel listing every broken reference. Each one gets one of three outcomes:</p>
 <ul>
-  <li><span class="pill info">suggest</span> one element clearly matches what was referenced before. You can preview it in the 3D view and accept it, or accept all suggestions at once.</li>
+  <li><span class="pill info">suggest</span> one element clearly matches what was referenced before. <b>Preview</b> shows the feature as it would regenerate, <b>Highlight</b> shows the element on the geometry before that feature, and you accept it, or accept all suggestions at once.</li>
   <li><span class="pill warn">ambiguous</span> several elements are plausible, for example because an edge was split in two. The panel lists the candidates with their scores, and you choose one.</li>
   <li><span class="pill">none</span> nothing is close enough. You pick the replacement in the 3D view, or open the feature in its normal FreeCAD editor.</li>
 </ul>
 <p>The panel opens automatically after a recompute that breaks something. You can switch that off in the panel or in the preferences, and open the panel from the PartDesign toolbar instead.</p>
 <div class="figrow">
-  <figure><img src="images/panel.png" width="430" height="796" alt="Resolve Mode panel listing three broken references: two with a suggested match at 89% similarity and one with five candidates within tolerance"><figcaption>Three broken references after the sketch profile was redrawn.</figcaption></figure>
+  <figure><img src="images/panel.png" width="440" height="900" alt="Resolve Mode panel listing three broken references. The first card shows Edge13 highlighted on Pad, with Preview, Highlight, Accept and Pick in 3D view buttons"><figcaption>Three broken references after the sketch profile was redrawn. Highlight is on for the first one.</figcaption></figure>
   <figure><img src="images/panel-candidates.png" width="430" height="796" alt="The ambiguous card expanded, listing candidate edges with similarity bars from 78% down to 58%, each with preview and accept buttons"><figcaption>An ambiguous match: the original edge was split into two, so no single candidate wins.</figcaption></figure>
 </div>
 
@@ -225,8 +225,29 @@ AttachmentSupport|Pad|Face4  {"c":[10.0,12.0,2.5],"d":[-0.0,1.0,-0.0],"k":"Face"
   <li><b>Undo:</b> each action is one transaction (<code>Resolve_Mode: Edge10 -&gt; Edge13</code>, or <code>relink 2 references</code> for Accept all), committed before the recompute.</li>
   <li><b>Pick in 3D view</b> temporarily shows the target feature and hides its visible siblings in the Body, so clicks land on the right shape. A selection observer then accepts the first element of the right kind on that target. Visibility is restored afterwards.</li>
   <li><b>Resolve manually</b> hands the feature to FreeCAD's own editor: <code>setEdit</code>, or Attachment Editor for <code>AttachmentSupport</code>.</li>
-  <li><b>Preview</b> is a temporary Coin <code>SoAnnotation</code> added to the view's scene graph. It shows the candidate in blue and a red marker at the old centre. Nothing is added to the document.</li>
+  <li><b>Highlight</b> shows the candidate on the feature the reference points at, the geometry the user saw when first picking. That feature is shown and the later features of the Body are hidden. The candidate is drawn in blue as a temporary Coin <code>SoAnnotation</code>, with a red ring at the old element's centre.</li>
+  <li><b>Preview</b> shows the referencing feature as it would regenerate with the candidate. See below.</li>
 </ul>
+
+<h3>Preview without committing</h3>
+<p><code>references.preview_shape()</code> regenerates one feature in a throwaway transaction:</p>
+<pre><code>doc.openTransaction("Resolve_Mode preview")
+write_groups(obj, prop, groups_with_candidate)   # other broken entries of the property left out
+obj.recompute()                                  # this feature only, not its dependents
+shape = obj.Shape.copy()
+doc.abortTransaction()                           # link, shape and placement come back
+if it_was_failing and obj.isValid():
+    obj.recompute()                              # abort doesn't restore the error flag; this does</code></pre>
+<ul>
+  <li><b>Display:</b> a solid result is drawn shaded, with the Body's features hidden, since the visible tip is the stale result. A sketch or datum result is drawn as wires on top of the feature it attaches to.</li>
+  <li><b>No side effects:</b> the controller ignores the recompute signals this produces, so the panel isn't rebuilt and no fingerprints are captured.</li>
+  <li><b>Nothing left behind:</b> no undo or redo entry remains, and the feature's link, shape and error state are unchanged afterwards. These are covered by tests.</li>
+  <li><b>When it's refused:</b> while a task dialog is open, because its transaction would be mixed in.</li>
+</ul>
+<div class="figrow">
+  <figure><img src="images/preview-result.png" width="400" height="370" alt="The fillet regenerated with the suggested edge, drawn as a shaded blue solid with later features hidden"><figcaption><b>Preview</b>: Fillet003 as it would regenerate with Edge13.</figcaption></figure>
+  <figure><img src="images/preview-highlight.png" width="400" height="370" alt="The Pad with Edge13 highlighted in blue along the back top edge and a small red ring where the old edge was"><figcaption><b>Highlight</b>: Edge13 on the Pad, the geometry before the fillet. The red ring marks where Edge10 was.</figcaption></figure>
+</div>
 
 <h2 id="faq">Questions from the topological naming developers</h2>
 <p>These come from the forum thread <em>[PROPOSAL] A "Broken References" resolver panel</em> (August 2026).</p>
@@ -308,11 +329,12 @@ AttachmentSupport|Pad|Face4  {"c":[10.0,12.0,2.5],"d":[-0.0,1.0,-0.0],"k":"Face"
   <thead><tr><th>File</th><th>Responsibility</th></tr></thead>
   <tbody>
     <tr><td><code>core/signature.py</code></td><td>Fingerprint format, <code>score()</code>, <code>classify()</code>. Pure Python with no FreeCAD dependency, unit-tested.</td></tr>
-    <tr><td><code>references.py</code></td><td>Scope, reading and writing link properties, detection, capture, candidates, <code>relink()</code>, transactions. Console-safe (no GUI imports).</td></tr>
+    <tr><td><code>references.py</code></td><td>Scope, reading and writing link properties, detection, capture, candidates, <code>relink()</code>, <code>preview_shape()</code>, transactions. Console-safe (no GUI imports).</td></tr>
     <tr><td><code>gui/controller.py</code></td><td>Document observer, debounce, auto-open, applying fixes, dismissed-state tracking.</td></tr>
     <tr><td><code>gui/panel.py</code></td><td>The dock widget and cards. Colors come from the Qt palette, so light and dark themes both work.</td></tr>
-    <tr><td><code>gui/highlight.py</code></td><td>Coin preview overlay.</td></tr>
-    <tr><td><code>gui/picker.py</code></td><td>Selection observer and visibility isolation for Pick in 3D view.</td></tr>
+    <tr><td><code>gui/highlight.py</code></td><td>Coin overlays for Highlight and Preview.</td></tr>
+    <tr><td><code>gui/isolate.py</code></td><td>Temporarily hides and shows Body features, and restores them. Shared by picking and both preview modes.</td></tr>
+    <tr><td><code>gui/picker.py</code></td><td>Selection observer for Pick in 3D view.</td></tr>
     <tr><td><code>init_gui.py</code></td><td>Registers the command, the PartDesign toolbar (through a workbench manipulator), the Tools menu entry, the preference page and the observer.</td></tr>
   </tbody>
 </table>
@@ -327,6 +349,7 @@ AttachmentSupport|Pad|Face4  {"c":[10.0,12.0,2.5],"d":[-0.0,1.0,-0.0],"k":"Face"
       <li>several broken entries in one property are handled</li>
       <li>relinking works and each relink is one undo step</li>
       <li>the sketch-plane fallback produces candidates</li>
+      <li>a preview regenerates the feature and leaves the link, error state and undo history untouched</li>
     </ul></li>
 </ul>
 <pre><code>python -m pytest -q tests

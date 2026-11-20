@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0 (2026-11-19)
+
+- **Preview** now shows the feature as it would regenerate with the candidate (for example the fillet applied to the suggested edge). It is computed in a throwaway transaction, so nothing in the document changes.
+- New **Highlight** button shows the candidate on the geometry before the feature (for example the edge on the Pad), with later features hidden and a red ring where the old element was.
+- Candidate rows have both buttons. Card buttons wrap when the panel is narrow.
+
 ## 0.1.1 (2026-11-19)
 
 - Fixed: the Resolve_Mode preferences group showed FeatureNamer's page. The page class now has a unique name, because FreeCAD identifies Python preference pages by class name.

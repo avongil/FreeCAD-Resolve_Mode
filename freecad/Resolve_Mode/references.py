@@ -439,3 +439,64 @@ def transaction(doc, name: str):
         raise
     else:
         doc.commitTransaction()
+
+
+# --------------------------------------------------------------------------
+# Preview
+
+
+@dataclass
+class Preview:
+    shape: object | None  # copy of the feature's shape as it would regenerate, or None
+    error: str  # why there is no shape
+
+
+def preview_shape(ref: Ref, element: str) -> Preview:
+    """What ``ref``'s feature would look like with ``element`` relinked.
+
+    The relink and a recompute of that one feature run inside a transaction
+    that is then aborted, so the document is left exactly as it was. Other
+    broken entries of the same property are left out of the preview so they
+    don't make the feature fail.
+    """
+    obj, _ = ref.resolve()
+    if obj is None:
+        return Preview(None, "object no longer exists")
+    doc = obj.Document
+    if doc.Recomputing:
+        return Preview(None, "the document is recomputing")
+    if doc.HasPendingTransaction:
+        return Preview(None, "an edit is in progress; close the task dialog first")
+    others = {(r.group, r.slot) for r in iter_refs(obj) if r.prop == ref.prop and r.broken}
+    others.discard((ref.group, ref.slot))
+    groups = []
+    for gi, (target, subs) in enumerate(read_groups(obj, ref.prop)):
+        kept = []
+        for si, sub in enumerate(subs):
+            if (gi, si) == (ref.group, ref.slot):
+                kept.append(ref.prefix + element)
+            elif (gi, si) not in others:
+                kept.append(sub)
+        groups.append((target, kept or subs))
+    shape, error = None, ""
+    was_valid = obj.isValid()
+    doc.openTransaction("Resolve_Mode preview")
+    try:
+        write_groups(obj, ref.prop, groups)
+        obj.recompute()
+        if obj.isValid() and not obj.Shape.isNull():
+            shape = obj.Shape.copy()
+        else:
+            error = obj.getStatusString() or "the feature still fails"
+    except Exception as exc:
+        error = str(exc)
+    finally:
+        doc.abortTransaction()
+        if not was_valid and obj.isValid():
+            # Aborting restores properties but not the error flag; recompute the
+            # restored (still broken) feature so it reports its real state again.
+            try:
+                obj.recompute()
+            except Exception:
+                pass
+    return Preview(shape, error)

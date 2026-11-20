@@ -5,6 +5,7 @@ up-to-face, captures fingerprints, breaks the topology, then checks the
 suggestions and relinks them.
 """
 
+import sys
 from pathlib import Path
 
 import Part  # noqa: E402
@@ -14,6 +15,8 @@ import freecad  # noqa: E402
 
 # test-only: let the repo copy shadow any installed one
 freecad.__path__.insert(0, str(Path(__file__).resolve().parents[1] / "freecad"))
+for _m in [m for m in sys.modules if m.startswith("freecad.Resolve_Mode")]:
+    del sys.modules[_m]  # FreeCAD may already have imported an installed copy
 
 from freecad.Resolve_Mode import references as R  # noqa: E402
 
@@ -112,6 +115,13 @@ check(fil_issue.verdict.status == "suggest", f"fillet match is confident ({fil_i
 sk_issue = next((i for i in issues if i.ref.obj == "Sketch001"), None)
 check(sk_issue is not None, "sketch attachment reported")
 check(sk_issue.verdict is not None and sk_issue.verdict.status == "suggest", "sketch face match is confident")
+
+# Preview: regenerate with the candidate, then leave the document exactly as it was
+base_before, undo_before = list(fil.Base[1]), list(doc.UndoNames)
+pv = R.preview_shape(fil_issue.ref, best)
+check(pv.shape is not None and len(pv.shape.Faces) > 6, f"preview regenerates the fillet ({pv.error or 'ok'})")
+check(list(fil.Base[1]) == base_before and not fil.isValid(), "preview restores the link and the error state")
+check(list(doc.UndoNames) == undo_before and not doc.RedoNames, "preview leaves no undo or redo entry")
 
 # Relink the fillet (another entry in the same property is healthy)
 with R.transaction(doc, "relink"):
