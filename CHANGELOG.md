@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 (2026-11-20)
+
+- The Highlight button is now **Before**, with a rewind-clock icon. It takes you back to the model before the feature and highlights the candidate there.
+
 ## 0.2.0 (2026-11-19)
 
 - **Preview** now shows the feature as it would regenerate with the candidate (for example the fillet applied to the suggested edge). It is computed in a throwaway transaction, so nothing in the document changes.

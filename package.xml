@@ -2,7 +2,7 @@
 <package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
   <name>Resolve_Mode</name>
   <description>Finds broken PartDesign references (missing edges/faces, broken sketch attachments) and suggests replacements by geometric similarity. Preview, accept, or pick the replacement in the 3D view from one panel.</description>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
   <date>2026-11-19</date>
 
   <maintainer email="6765151+avongil@users.noreply.github.com">avongil</maintainer>

@@ -12,6 +12,7 @@ from .qt import QtCore, QtGui, QtWidgets
 translate = App.Qt.translate
 
 DOCK_NAME = "Resolve_Mode_Dock"
+BEFORE_ICON = "rewind"
 
 
 def _mix(a: QtGui.QColor, b: QtGui.QColor, t: float) -> str:
@@ -313,7 +314,7 @@ class Card(QtWidgets.QFrame):
             )
         elif v is not None and v.status == "suggest":
             self.buttons.addWidget(self._preview_btn(v.best.name, "result", translate("Resolve_Mode", "Preview")))
-            self.buttons.addWidget(self._preview_btn(v.best.name, "base", translate("Resolve_Mode", "Highlight")))
+            self.buttons.addWidget(self._preview_btn(v.best.name, "base", translate("Resolve_Mode", "Before")))
             self.buttons.addWidget(
                 self._btn(translate("Resolve_Mode", "Accept"), "check", lambda: self.panel.accept([(ref, v.best.name)]))
             )
@@ -336,8 +337,8 @@ class Card(QtWidgets.QFrame):
             tip = translate("Resolve_Mode", "Show {obj} as it would regenerate with {el}. Nothing is changed.")
             b.setToolTip(tip.format(obj=olabel, el=element))
         else:
-            b = self._btn(text, "target", None, checkable=True)
-            tip = translate("Resolve_Mode", "Highlight {el} on {target}, the geometry before {obj}")
+            b = self._btn(text, BEFORE_ICON, None, checkable=True)
+            tip = translate("Resolve_Mode", "Before: show {el} on {target}, the model before {obj}")
             b.setToolTip(tip.format(el=element, target=tlabel, obj=olabel))
         b.toggled.connect(lambda on, btn=b: self.panel.preview(self, btn, element, on, mode))
         return b
@@ -355,9 +356,9 @@ class Card(QtWidgets.QFrame):
             self._set_info("eye", th.highlight, text)
         else:
             text = translate(
-                "Resolve_Mode", "{el} highlighted on {target}, the geometry before {obj}. Red ring: where {old} was."
+                "Resolve_Mode", "Back before {obj}: {el} highlighted on {target}. Red ring: where {old} was."
             ).format(el=element, target=tlabel, obj=olabel, old=ref.element)
-            self._set_info("target", th.highlight, text)
+            self._set_info(BEFORE_ICON, th.highlight, text)
 
     def show_error(self, text: str):
         self._set_info("alert", self.panel.theme.danger, text)

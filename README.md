@@ -6,7 +6,7 @@ A FreeCAD addon that finds **broken PartDesign references** (fillet or chamfer e
 
 - **Detects** every reference FreeCAD has marked missing (`?Edge14`), plus references to elements that no longer exist.
 - **Suggests** a replacement by geometric similarity (type, size, position, direction, radius), for example *"Suggested match: Edge13, geometric similarity 89%"*.
-- **Preview** shows the feature as it would regenerate with the suggestion, without changing anything. **Highlight** shows the suggested edge or face on the geometry before that feature, as when you first picked it.
+- **Preview** shows the feature as it would regenerate with the suggestion, without changing anything. **Before** goes back to the model before that feature and highlights the suggested edge or face there, as when you first picked it.
 - **Accept** relinks it as one undo step. **Accept all suggested** fixes every confident match at once.
 - **Show candidates** lists the near-ties when no match is clear. **Pick in 3D view** lets you click the replacement yourself.
 - **Auto mode** opens the panel after any recompute that breaks something. Turn it off with the checkbox in the panel header or in the preferences.

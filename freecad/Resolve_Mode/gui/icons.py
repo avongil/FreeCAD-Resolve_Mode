@@ -27,9 +27,9 @@ _PATHS = {
     "refresh": '<path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5"/>',
     "close": '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
     "edit": '<path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/>',
-    "target": (
-        '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.4"/>'
-        '<path d="M12 1.5v3.5M12 19v3.5M1.5 12H5M19 12h3.5"/>'
+    # Clock face with a counter-clockwise arrow: the usual history/rewind sign.
+    "rewind": (
+        '<path d="M3.6 12.6a8.5 8.5 0 1 0 2.6-6.5L3.6 8.6"/><path d="M3.4 3.8v4.9h4.9"/><path d="M12 7.6v4.6l3.2 2"/>'
     ),
     "lock": '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
 }
